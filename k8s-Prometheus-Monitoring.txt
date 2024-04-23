@@ -1,0 +1,105 @@
+Monitor K8S Cluster Using PROMETHEUS
+=====================================
+
+Install using Deamonset:
+^^^^^^^^^^^^^^^^^^^^^^^^
+1. Create a namespace
+kubectl create namespace prometheus
+
+2. Create a Prometheus configuration file
+vi prometheus-config.yaml
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-server-conf
+  namespace: prometheus
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+    scrape_configs:
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+
+3. Apply the Prometheus configuration
+kubectl apply -f prometheus-config.yaml -n prometheus
+
+4. Create a Prometheus deployment
+vi prometheus-deamonset.yaml
+
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: prometheus-server
+  namespace: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: prometheus-server
+  template:
+    metadata:
+      labels:
+        app: prometheus-server
+    spec:
+      containers:
+        - name: prometheus
+          image: prom/prometheus
+          ports:
+            - containerPort: 9090
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/prometheus
+      volumes:
+        - name: config-volume
+          configMap:
+            name: prometheus-server-conf
+            defaultMode: 420
+
+5. Apply the Prometheus deamonset.
+kubectl apply -f prometheus-deamonset.yaml -n prometheus
+
+6. Expose Prometheus as a service
+vi prometheus-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus-service
+  namespace: prometheus
+spec:
+  selector:
+    app: prometheus-server
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 9090
+  type: NodePort
+
+7. Apply the Prometheus service
+kubectl apply -f prometheus-service.yaml -n prometheus
+
+8. Access Prometheus
+kubectl get service prometheus-service -n prometheus
+
+use http://nodeIP:nodePort
+
+
+Install using Helm:
+^^^^^^^^^^^^^^^^^^^
+
+Add helm repo
+$ helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+
+Update helm repo
+$ helm repo update
+
+Install helm
+$ helm install prometheus prometheus-community/prometheus
+
+Expose Prometheus Service
+This is required to access prometheus-server using your browser.
+
+$ kubectl expose service prometheus-server --type=NodePort --target-port=9090 --name=prometheus-server-ext
+
